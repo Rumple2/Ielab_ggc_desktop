@@ -1,13 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:ggc_desktop/initializeData.dart';
 import 'package:ggc_desktop/theme.dart';
 import 'API/api_service.dart';
 import 'Connection.dart';
-import 'utils/constants.dart';
 
-import 'desktop_body.dart';
-
-void main() async{
+void main(){
   runApp(const MyApp());
   MongoDatabase.connect();
 }
@@ -20,7 +16,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      title: 'GGC & PARTENAIRES',
       debugShowCheckedModeBanner: false,
       color: globalColor,
       theme: ThemeData(

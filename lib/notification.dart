@@ -27,9 +27,10 @@ class Notifications extends StatelessWidget {
              for (int i = 0; i < allCotisation.length; i++) {
                int posPage = allCotisation[i].posPage;
                 if(allCotisation[i].pages[posPage].length >= 10){
+                  print("voicci : "+allCotisation[i].pages[posPage].length.toString());
                   notifCotisationCase.add(allCotisation[i]);
                 }
-                if(allCotisation[i].pages.length >=14){
+                if(allCotisation[i].pages.length >=10){
                   notifCotisationPage.add(allCotisation[i]);
                 }
              }

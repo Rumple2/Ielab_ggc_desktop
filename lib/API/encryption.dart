@@ -1,5 +1,5 @@
 import 'package:encrypt/encrypt.dart' as encrypt;
-
+// Class de cripatage de mot de passe
 class Encryption{
 
   static final key = encrypt.Key.fromLength(32);

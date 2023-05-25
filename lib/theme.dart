@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:ggc_desktop/API/api_service.dart';
 import 'package:ggc_desktop/client/BodyClient.dart';
-import 'Mise/mise.dart';
 import 'desktop_body.dart';
 
 Widget currentPage = BodyClient();
@@ -34,7 +33,6 @@ InputDecoration formDecoration(String name,{last = ""}){
   return InputDecoration(
     label: Text(name,style: formTextStyle,),
      hintText: last,
-    border:  OutlineInputBorder()
   );
 }
 String percentageModifier(double value) {
@@ -45,10 +43,8 @@ String nombreModifier(double value) {
   final roundedValue = value.ceil().toInt().toString();
   return '$roundedValue';
 }
-reloadPage(context) {
-  if(!MongoDatabase.db.isConnected){
-    MongoDatabase.db.open();
-  }
-  Navigator.pop(context);
-  Navigator.push(context, MaterialPageRoute(builder: (_) => DesktopBody()));
+String sleekExtMoney(double value) {
+  final roundedValue = value.ceil().toInt().toString();
+  return '$roundedValue Fcfa';
 }
+

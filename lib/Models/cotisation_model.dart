@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:ggc_desktop/Models/achatTrans_model.dart';
+import 'package:ggc_desktop/Models/tontine_model.dart';
 import '../API/api_service.dart';
 import 'package:mongo_dart/mongo_dart.dart';
 
@@ -48,17 +50,43 @@ class CotisationModel {
     var _id = ObjectId().$oid;
     CotisationModel cotisationModel = CotisationModel(id_client: clientId, id_mise: miseId,solde:montant );
     cotisationModel.id = _id;
-    var result_res = await MongoDatabase.insert(
+    var result = await MongoDatabase.insert(
         cotisationModel.toJson(), Config.cotisation_collection);
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text("Cotisation Enregistré "),
     backgroundColor: Colors.green,
     ));
+    if(result == false){
+      showDialog(
+          context: context,
+          builder: (context) {
+            return AlertDialog(
+                title: Text("Erreur"),
+                content: Container(
+                  height: 150,
+                  child: Column(children: const [
+                    Text(
+                      "Echec de l'opération",
+                      style:
+                      TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
+                    ),
+                  ]),
+                ));
+          });
+    }
   }
-  static Future<void> deleteCotisation(String idAgent, BuildContext context) async {
-    var result = await MongoDatabase.deleteById(idAgent,Config.cotisation_collection);
+  static Future<void> deleteCotisation(CotisationModel cotisationModel,TontineModel tontineModel, BuildContext context) async {
+    AchatTransModel achatTransModel = AchatTransModel();
+    achatTransModel.id_tontine = tontineModel.id;
+    achatTransModel.montant = cotisationModel.solde;
+    achatTransModel.retrait = cotisationModel.solde;
+    achatTransModel.designation = tontineModel.typeTontine;
+    achatTransModel.solde = achatTransModel.montant - cotisationModel.solde;
+    var result = await MongoDatabase.deleteById(cotisationModel.id,Config.cotisation_collection).then((value){
+      var result = AchatTransModel.transactionFinCloture(cotisationModel,achatTransModel,context);
+    });
     ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text("Agent Modifier"),
+        .showSnackBar(SnackBar(content: Text("Cotisation Modifié"),
       backgroundColor: Colors.green,
     )
     );

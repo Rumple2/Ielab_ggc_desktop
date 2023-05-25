@@ -13,10 +13,9 @@ class ClientModel {
   late String profession;
   late String contact;
   late String lieu_activite;
-  late List cotisationsId;
   late String id_agent;
-  CotisationModel cModel = CotisationModel(
-      id_client: "", id_mise: "", solde: 0.0);
+  CotisationModel cModel =
+      CotisationModel(id_client: "", id_mise: "", solde: 0.0);
 
   ClientModel({
     this.id = "",
@@ -30,7 +29,7 @@ class ClientModel {
     this.id_agent = "",
   });
 
-  ClientModel.fromJson(Map<String, dynamic> json){
+  ClientModel.fromJson(Map<String, dynamic> json) {
     id = json['id'];
     nom = json['nom'];
     prenom = json['prenom'];
@@ -39,7 +38,6 @@ class ClientModel {
     profession = json['profession'];
     contact = json['contact'];
     lieu_activite = json['lieu_activite'];
-    cotisationsId = json['cotisationsId'];
     id_agent = json['id_agent'];
   }
 
@@ -53,49 +51,64 @@ class ClientModel {
     _data['profession'] = profession;
     _data['contact'] = contact;
     _data['lieu_activite'] = lieu_activite;
-    _data['cotisationsId'] = cotisationsId;
     _data['id_agent'] = id_agent;
     return _data;
   }
 
-  static Future<void> insertClient(ClientModel clientModel,
-      BuildContext context) async {
-    final _id = M
-        .ObjectId()
-        .$oid;
+  static Future<void> insertClient(
+      ClientModel clientModel, BuildContext context) async {
+    final _id = M.ObjectId().$oid;
     clientModel.id = _id;
-    clientModel.cotisationsId = [];
     var result = await MongoDatabase.insert(
         clientModel.toJson(), Config.client_collection);
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text("Client Enregistré "),
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text("Client Enregistré "),
       backgroundColor: Colors.green,
     ));
+    if(result == false){
+      showDialog(
+          context: context,
+          builder: (context) {
+            return AlertDialog(
+                title: Text("Erreur"),
+                content: Container(
+                  height: 150,
+                  child: Column(children: const [
+                    Text(
+                      "Echec de l'opération",
+                      style:
+                      TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
+                    ),
+                  ]),
+                ));
+          });
+    }
   }
 
   static Future<void> modifierClient(
       ClientModel clientModel, BuildContext context) async {
-    var result = await MongoDatabase.updateClient(clientModel,Config.client_collection);
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text("Client Modifier"),
+    var result = await MongoDatabase.updateClient(clientModel, Config.client_collection);
+
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text("Client Modifié"),
       backgroundColor: Colors.green,
-    )
-    );
+    ));
   }
 
-  static Future<Object> deleteClient(String idClient,
-      BuildContext context) async {
+  static Future<bool> verificationStatutClient(
+      String idClient,context) async {
+
     var clientCot = await MongoDatabase.getCotisationByClientId(idClient);
-    if (clientCot.length == 0) {
-      await MongoDatabase.deleteById(idClient, Config.client_collection);
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("Client Supprimer"),
-        backgroundColor: Colors.green,)
-      );
+    if (clientCot.isEmpty) {
+      deleteClient(idClient, context);
       return false;
+    } else {
+        return true;
     }
-    else {
-      return true;
-    }
+  }
+
+  static Future<void> deleteClient(
+      String idClient, BuildContext context) async {
+    await MongoDatabase.deleteById(idClient, Config.client_collection);
   }
 }

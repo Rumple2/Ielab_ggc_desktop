@@ -3,12 +3,10 @@ import 'package:ggc_desktop/API/api_service.dart';
 import 'package:ggc_desktop/API/config.dart';
 import 'package:ggc_desktop/API/encryption.dart';
 import 'package:ggc_desktop/Models/agent_model.dart';
-import 'package:ggc_desktop/Models/mise_model.dart';
+import 'package:ggc_desktop/Models/tontine_model.dart';
 import 'package:ggc_desktop/agent/BodyAgent.dart';
-import '../Models/client_model.dart';
 import '../Models/cotisation_model.dart';
 import '../desktop_body.dart';
-import '../loading.dart';
 import '../theme.dart';
 
 class ListAgent extends StatefulWidget {
@@ -19,15 +17,17 @@ class ListAgent extends StatefulWidget {
 }
 
 class _ListAgentState extends State<ListAgent> {
-  late final _data;
-  late final _dataCotisations;
-  late final _dataMises;
+  ScrollController _scrollController = ScrollController();
+
+  var _data;
+  var _dataCotisations;
+  var _dataMises;
   double textFieldWidth = 200;
   late List<AgentModel> agentList = [];
   late List<AgentModel> _filterAgentList = [];
   late List<CotisationModel> cotisations = [];
   late List<CotisationModel> filteredCotisations = [];
-  late List<MiseModel> mises = [];
+  late List<TontineModel> mises = [];
   List<DataRow> _agentRow = [];
   final agentFormKey = GlobalKey<FormState>();
   final nom = TextEditingController();
@@ -38,32 +38,35 @@ class _ListAgentState extends State<ListAgent> {
   final mdp = TextEditingController();
   bool mListColor = false;
   bool eListColor = false;
-  String idAgent = "";
+  String nomAgent = "";
   double totalMontant = 0.0;
+
+
 
   @override
   void initState() {
     _data = MongoDatabase.getCollectionData(Config.agent_collection);
     _dataCotisations =
         MongoDatabase.getCollectionData(Config.cotisation_collection);
-    _dataMises =
-        MongoDatabase.getCollectionData(Config.mise_collection).then((value) {
+    _dataMises = MongoDatabase.getCollectionData(Config.tontine_collection)
+        .then((value) {
       mises.clear();
       for (int i = 0; i < value.length; i++) {
-        mises.add(MiseModel.fromJson(value[i]));
+        mises.add(TontineModel.fromJson(value[i]));
       }
     });
     super.initState();
   }
 
+  // recheache agent par nom
   void searchFilter(String search) {
     List<AgentModel> results = [];
     if (search.isEmpty) {
       results = agentList;
     } else {
       results = agentList
-          .where((client) =>
-              client.nom.toLowerCase().contains(search.toLowerCase()))
+          .where(
+              (agent) => agent.nom.toLowerCase().contains(search.toLowerCase()))
           .toList();
     }
     setState(() {
@@ -72,17 +75,18 @@ class _ListAgentState extends State<ListAgent> {
     });
   }
 
-
+  // Calcule du taux à prelever de chaque agent sur les cotisations
   double calculTauxPrelever(CotisationModel cotisation) {
-    MiseModel mise = getMise(cotisation.id_mise);
+    TontineModel tontine = getTontine(cotisation.id_mise);
     double resultat = 0;
-    if(cotisation.solde>0){
-      double taux = mise.montantPrelever * cotisation.pages.length;
-      resultat = taux + mise.montantParMise;
+    if (cotisation.solde > 0) {
+      double taux = tontine.montantPrelever * cotisation.pages.length;
+      resultat = taux + tontine.montantParMise;
     }
     return resultat;
   }
 
+  // Filtrage de cotisation par id de l'agent
   void searchFilterCot(String search) {
     print(search);
     totalMontant = 0.0;
@@ -94,16 +98,17 @@ class _ListAgentState extends State<ListAgent> {
     setState(() {
       filteredCotisations.clear();
       filteredCotisations = results;
-       for(int i =0; i < filteredCotisations.length; i++){
+      for (int i = 0; i < filteredCotisations.length; i++) {
         print(filteredCotisations[i].solde);
-          totalMontant += calculTauxPrelever(filteredCotisations[i]);
+        totalMontant += calculTauxPrelever(filteredCotisations[i]);
       }
     });
   }
 
-  MiseModel getMise(String search) {
-    late MiseModel filteredMises;
-    List<MiseModel> results = [];
+  // Filtrage de Tontine par id
+  TontineModel getTontine(String search) {
+    late TontineModel filteredMises;
+    List<TontineModel> results = [];
     results = mises;
     results = mises.where((mise) => mise.id == search).toList();
 
@@ -111,197 +116,226 @@ class _ListAgentState extends State<ListAgent> {
     return filteredMises;
   }
 
+  //Rechargement de la page
   reloadPage(context) {
-    currentPage = BodyAgent();
-    Navigator.pop(context);
-    Navigator.push(context, MaterialPageRoute(builder: (_) => DesktopBody()));
+    setState(() {
+      _data = MongoDatabase.getCollectionData(Config.agent_collection);
+      _dataCotisations =
+          MongoDatabase.getCollectionData(Config.cotisation_collection);
+      _dataMises = MongoDatabase.getCollectionData(Config.tontine_collection)
+          .then((value) {
+        mises.clear();
+        for (int i = 0; i < value.length; i++) {
+          mises.add(TontineModel.fromJson(value[i]));
+        }
+      });
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ClientParAgent(),
-            FutureBuilder(
-                future: _data,
-                builder: (context, AsyncSnapshot snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return Center(
-                      child: CircularProgressIndicator(),
-                    );
-                  }
-                  if (snapshot.connectionState == ConnectionState.done &&
-                      snapshot.hasData) {
-                    agentList.clear();
-                    _agentRow.clear();
-                    for (int i = 0; i < snapshot.data.length; i++) {
-                      agentList.add(AgentModel.fromJson(snapshot.data[i]));
-                    }
-                    if (_filterAgentList.isEmpty) _filterAgentList = agentList;
-
-                    nombreAgent = agentList.length;
-                    for (int i = 0; i < _filterAgentList.length; i++) {
-                      DataRow aRow = DataRow(
-                        onSelectChanged: (value) {
-                          setState(() {
-                            // idAgent = _filterAgentList[i].id;
-                            searchFilterCot(_filterAgentList[i].id);
-                          });
-                        },
-                        color: MaterialStateColor.resolveWith((states) {
-                          //total = data[i]['nb_nuit'] * data[i]['cout']*1.0;
-                          return const Color.fromRGBO(
-                              213, 214, 2, 223); //make tha magic!
-                        }),
-                        cells: [
-                          DataCell(Text("${i + 1}")),
-                          DataCell(Text("${_filterAgentList[i].nom}")),
-                          DataCell(Text("${_filterAgentList[i].prenom}")),
-                          DataCell(Text("${_filterAgentList[i].adresse}")),
-                          DataCell(
-                              Text("${_filterAgentList[i].zoneAffectation}")),
-                          DataCell(Text("${_filterAgentList[i].telephone}")),
-                          DataCell(Row(
-                            children: [
-                              IconButton(
-                                onPressed: () {
-                                  ModifierAgent(_filterAgentList[i]);
-                                },
-                                icon: Icon(Icons.edit),
-                              ),
-                              SizedBox(
-                                width: 10,
-                              ),
-                              IconButton(
-                                onPressed: () {
-                                  deleteAgent(_filterAgentList[i]);
-                                },
-                                icon: Icon(Icons.delete),
-                              )
-                            ],
-                          ))
-                        ],
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ClientParAgent(),
+        Expanded(
+          flex: 15,
+          child: Scrollbar(
+            thumbVisibility: true, //always show scrollbar
+            thickness: 10, //width of scrollbar
+            radius: Radius.circular(20), //corner radius of scrollbar
+            scrollbarOrientation: ScrollbarOrientation.bottom,
+            controller: _scrollController,
+            child: SingleChildScrollView(
+              controller: _scrollController,
+              scrollDirection: Axis.horizontal,
+              child: FutureBuilder(
+                  future: _data,
+                  builder: (context, AsyncSnapshot snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return Center(
+                        child: CircularProgressIndicator(),
                       );
-                      _agentRow.add(aRow);
                     }
-                    return Container(
-                      //width: MediaQuery.of(context).size.width ,
-                      margin: EdgeInsets.all(8.0),
-                      child: Column(
-                        children: [
-                          Container(
-                            width: 500,
-                            margin: EdgeInsets.all(8.0),
-                            padding: EdgeInsets.all(8.0),
-                            decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(8.0)),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    if (snapshot.connectionState == ConnectionState.done &&
+                        snapshot.hasData) {
+                      agentList.clear();
+                      _agentRow.clear();
+                      for (int i = 0; i < snapshot.data.length; i++) {
+                        agentList.add(AgentModel.fromJson(snapshot.data[i]));
+                      }
+                      if (_filterAgentList.isEmpty) _filterAgentList = agentList;
+
+                      nombreAgent = agentList.length;
+                      for (int i = 0; i < _filterAgentList.length; i++) {
+                        DataRow aRow = DataRow(
+                          onSelectChanged: (value) {
+                            setState(() {
+                              nomAgent = _filterAgentList[i].nom;
+                              searchFilterCot(_filterAgentList[i].id);
+                            });
+                          },
+                          color: MaterialStateColor.resolveWith((states) {
+                            //total = data[i]['nb_nuit'] * data[i]['cout']*1.0;
+                            return const Color.fromRGBO(
+                                213, 214, 2, 223); //make tha magic!
+                          }),
+                          cells: [
+                            DataCell(Text("${i + 1}")),
+                            DataCell(Text("${_filterAgentList[i].nom}")),
+                            DataCell(Text("${_filterAgentList[i].prenom}")),
+                            DataCell(Text("${_filterAgentList[i].adresse}")),
+                            DataCell(
+                                Text("${_filterAgentList[i].zoneAffectation}")),
+                            DataCell(Text("${_filterAgentList[i].telephone}")),
+                            DataCell(Row(
                               children: [
-                                Container(
-                                  padding: EdgeInsets.all(8.0),
-                                  height: 45,
-                                  width: 200,
-                                  decoration: BoxDecoration(
-                                      color: Colors.grey.shade200,
-                                      borderRadius: BorderRadius.circular(20)),
-                                  child: TextField(
-                                    onChanged: (value) {
-                                      searchFilter(value);
-                                    },
-                                    decoration: InputDecoration(
-                                        labelText: "Recherche ...",
-                                        border: InputBorder.none),
-                                  ),
+                                IconButton(
+                                  onPressed: () {
+                                    ModifierAgent(_filterAgentList[i])
+                                        .then((value) {
+                                      setState(() {
+                                        _data = MongoDatabase.getCollectionData(
+                                            Config.agent_collection);
+                                      });
+                                    });
+                                    ;
+                                  },
+                                  icon: Icon(Icons.edit),
+                                ),
+                                SizedBox(
+                                  width: 10,
                                 ),
                                 IconButton(
-                                    onPressed: () {
-                                      reloadPage(context);
-                                    },
-                                    icon: Icon(Icons.refresh))
+                                  onPressed: () {
+                                    deleteAgent(_filterAgentList[i]);
+                                  },
+                                  icon: Icon(Icons.delete),
+                                )
                               ],
+                            ))
+                          ],
+                        );
+                        _agentRow.add(aRow);
+                      }
+                      return Container(
+                        //width: MediaQuery.of(context).size.width ,
+                        margin: EdgeInsets.all(8.0),
+                        child: Column(
+                          children: [
+                            Container(
+                              width: 500,
+                              margin: EdgeInsets.all(8.0),
+                              padding: EdgeInsets.all(8.0),
+                              decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(8.0)),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Container(
+                                    padding: EdgeInsets.all(8.0),
+                                    height: 45,
+                                    width: 200,
+                                    decoration: BoxDecoration(
+                                        color: Colors.grey.shade200,
+                                        borderRadius: BorderRadius.circular(20)),
+                                    child: TextField(
+                                      onChanged: (value) {
+                                        searchFilter(value);
+                                      },
+                                      decoration: const InputDecoration(
+                                          hintText: "Recherche ...",
+                                          border: InputBorder.none),
+                                    ),
+                                  ),
+                                  IconButton(
+                                      onPressed: () {
+                                        setState(() {
+                                          _data = MongoDatabase.getCollectionData(
+                                              Config.agent_collection);
+                                        });
+                                      },
+                                      icon: Icon(Icons.refresh))
+                                ],
+                              ),
                             ),
-                          ),
-                          DataTable(
-                              headingRowColor: MaterialStateColor.resolveWith(
-                                  (states) => globalColor),
-                              dataRowHeight: 35,
-                              headingRowHeight: 70,
-                              columnSpacing:
-                                  MediaQuery.of(context).size.width * 0.05,
-                              columns: [
-                                DataColumn(
-                                  label: Text(
-                                    "",
-                                    style: columnTextStyle,
+                            DataTable(
+                                headingRowColor: MaterialStateColor.resolveWith(
+                                    (states) => globalColor),
+                                dataRowHeight: 35,
+                                headingRowHeight: 70,
+                                columnSpacing:
+                                    MediaQuery.of(context).size.width * 0.05,
+                                columns: [
+                                  DataColumn(
+                                    label: Text(
+                                      "",
+                                      style: columnTextStyle,
+                                    ),
                                   ),
-                                ),
-                                DataColumn(
-                                  label: Text(
-                                    "Nom",
-                                    style: columnTextStyle,
-                                    overflow: TextOverflow.visible,
-                                    softWrap: true,
+                                  DataColumn(
+                                    label: Text(
+                                      "Nom",
+                                      style: columnTextStyle,
+                                      overflow: TextOverflow.visible,
+                                      softWrap: true,
+                                    ),
                                   ),
-                                ),
-                                DataColumn(
-                                  label: Text(
-                                    "Prenom",
-                                    style: columnTextStyle,
-                                    overflow: TextOverflow.visible,
-                                    softWrap: true,
+                                  DataColumn(
+                                    label: Text(
+                                      "Prenom",
+                                      style: columnTextStyle,
+                                      overflow: TextOverflow.visible,
+                                      softWrap: true,
+                                    ),
                                   ),
-                                ),
-                                DataColumn(
-                                  label: Text(
-                                    "Adresse",
-                                    style: columnTextStyle,
-                                    overflow: TextOverflow.visible,
-                                    softWrap: true,
+                                  DataColumn(
+                                    label: Text(
+                                      "Adresse",
+                                      style: columnTextStyle,
+                                      overflow: TextOverflow.visible,
+                                      softWrap: true,
+                                    ),
                                   ),
-                                ),
-                                DataColumn(
-                                  label: Text(
-                                    "Zone",
-                                    style: columnTextStyle,
-                                    overflow: TextOverflow.visible,
-                                    softWrap: true,
+                                  DataColumn(
+                                    label: Text(
+                                      "Zone",
+                                      style: columnTextStyle,
+                                      overflow: TextOverflow.visible,
+                                      softWrap: true,
+                                    ),
                                   ),
-                                ),
-                                DataColumn(
-                                  label: Text(
-                                    "Telephone",
-                                    style: columnTextStyle,
-                                    overflow: TextOverflow.visible,
-                                    softWrap: true,
+                                  DataColumn(
+                                    label: Text(
+                                      "Telephone",
+                                      style: columnTextStyle,
+                                      overflow: TextOverflow.visible,
+                                      softWrap: true,
+                                    ),
                                   ),
-                                ),
-                                DataColumn(
-                                  label: Text(
-                                    "Mise à jour",
-                                    style: columnTextStyle,
-                                    overflow: TextOverflow.visible,
-                                    softWrap: true,
+                                  DataColumn(
+                                    label: Text(
+                                      "Mise à jour",
+                                      style: columnTextStyle,
+                                      overflow: TextOverflow.visible,
+                                      softWrap: true,
+                                    ),
                                   ),
-                                ),
-                              ],
-                              rows: _agentRow),
-                        ],
-                      ),
+                                ],
+                                rows: _agentRow),
+                          ],
+                        ),
+                      );
+                    }
+                    return Center(
+                      child: Text("No data"),
                     );
-                  }
-                  return Center(
-                    child: Text("No data"),
-                  );
-                }),
-          ],
+                  }),
+            ),
+          ),
         ),
-      ),
+      ],
     );
   }
 
@@ -324,7 +358,7 @@ class _ListAgentState extends State<ListAgent> {
             Expanded(
               child: Container(
                 child: Text(
-                  "${cotisation.id_client} : ${getMise(cotisation.id_mise).typeTontine}",
+                  "${cotisation.id_client} : ${getTontine(cotisation.id_mise).typeTontine}",
                   style: TextStyle(fontFamily: globalTextFont, fontSize: 18),
                 ),
               ),
@@ -356,114 +390,117 @@ class _ListAgentState extends State<ListAgent> {
   }
 
   ClientParAgent() {
-    return Column(
-      children: [
-        Padding(
-          padding: EdgeInsets.all(8.0),
-          child: Text("Client par Agent :",
-              style: TextStyle(
-                  fontSize: 26,
-                  fontFamily: globalTextFont,
-                  fontWeight: FontWeight.w700)),
-        ),
-        /*Container(
-          padding: EdgeInsets.all(8.0),
-          height: 50,
-          width: MediaQuery.of(context).size.width * 0.3,
-          child: TextField(
-            onChanged: (value) {
-              searchFilterCot(value);
-            },
-            decoration: InputDecoration(
-              label: Text(""),
-              prefixIcon: Icon(Icons.search),
-              border: OutlineInputBorder(),
+    return Expanded(
+      flex: 8,
+      child: Column(
+        children: [
+          Padding(
+            padding: EdgeInsets.all(8.0),
+            child: Text("Client par Agent : ${nomAgent}",
+                style: TextStyle(
+                    fontSize: 26,
+                    fontFamily: globalTextFont,
+                    fontWeight: FontWeight.w700)),
+          ),
+          /*Container(
+            padding: EdgeInsets.all(8.0),
+            height: 50,
+            width: MediaQuery.of(context).size.width * 0.3,
+            child: TextField(
+              onChanged: (value) {
+                searchFilterCot(value);
+              },
+              decoration: InputDecoration(
+                label: Text(""),
+                prefixIcon: Icon(Icons.search),
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ),*/
+          Container(
+            height: 50,
+            width: 650,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Container(
+                      padding: EdgeInsets.all(10),
+                      color: Colors.grey,
+                      child: Center(
+                          child: Text("Identifiant Clients",
+                              style: TextStyle(fontSize: 18)))),
+                ),
+                Expanded(
+                  child: Container(
+                      padding: EdgeInsets.all(10),
+                      color: Colors.grey,
+                      child: Center(
+                          child:
+                              Text("Solde", style: TextStyle(fontSize: 18)))),
+                ),
+                Expanded(
+                  child: Container(
+                      padding: EdgeInsets.all(10),
+                      color: Colors.blue,
+                      child: Center(
+                          child: Text(
+                        "Taux à prelever",
+                        style: TextStyle(fontSize: 18),
+                      ))),
+                ),
+              ],
             ),
           ),
-        ),*/
-        Container(
-          height: 50,
-          width: 650,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Container(
-                    padding: EdgeInsets.all(10),
-                    color: Colors.grey,
-                    child: Center(
-                        child: Text("Identifiant Clients",
-                            style: TextStyle(fontSize: 18)))),
-              ),
-              Expanded(
-                child: Container(
-                    padding: EdgeInsets.all(10),
-                    color: Colors.grey,
-                    child: Center(
-                        child: Text("Solde", style: TextStyle(fontSize: 18)))),
-              ),
-              Expanded(
-                child: Container(
-                    padding: EdgeInsets.all(10),
-                    color: Colors.blue,
-                    child: Center(
-                        child: Text(
-                      "Taux à prelever",
-                      style: TextStyle(fontSize: 18),
-                    ))),
-              ),
-            ],
-          ),
-        ),
-        Container(
-          height: MediaQuery.of(context).size.height * 0.7,
-          padding: EdgeInsets.all(2),
-          color: Colors.white,
-          width: 650,
-          child: FutureBuilder(
-              future: _dataCotisations,
-              builder: (context, AsyncSnapshot snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return Center(child: MyLoading());
-                } else {
-                  if (snapshot.connectionState == ConnectionState.done &&
-                      snapshot.hasData) {
-                    cotisations.clear();
-                    for (int i = 0; i < snapshot.data.length; i++) {
-                      cotisations
-                          .add(CotisationModel.fromJson(snapshot.data[i]));
-                    }
-                    return Column(
-                      children: [
-                        Container(
-                          width: 650,
-                          height: 650,
-                          child: ListView.builder(
-                            itemCount: filteredCotisations.length,
-                            itemBuilder: (context, index) {
-                              mListColor = !mListColor;
-                              return ViewClient(filteredCotisations[index]);
-                            },
-                          ),
-                        ),
-                        Expanded(
-                          child: Container(
+          Container(
+            height: MediaQuery.of(context).size.height * 0.8,
+            padding: EdgeInsets.all(2),
+            color: Colors.white,
+            width: 650,
+            child: FutureBuilder(
+                future: _dataCotisations,
+                builder: (context, AsyncSnapshot snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return Center(child: CircularProgressIndicator());
+                  } else {
+                    if (snapshot.connectionState == ConnectionState.done &&
+                        snapshot.hasData) {
+                      cotisations.clear();
+                      for (int i = 0; i < snapshot.data.length; i++) {
+                        cotisations
+                            .add(CotisationModel.fromJson(snapshot.data[i]));
+                      }
+                      return ListView(
+                        children: [
+                          Container(
                               height: 50,
-                              color: Colors.grey,
                               child: Center(
                                   child: Text(
-                                "Solde : ${totalMontant} Fcfa",
-                                style: TextStyle(fontSize: 26,color: Colors.white,fontWeight: FontWeight.w800),
+                                "Gains par agent: ${totalMontant} Fcfa",
+                                style: TextStyle(
+                                    fontSize: 26,
+                                    color: Colors.red,
+                                    fontWeight: FontWeight.w800),
                               ))),
-                        ),
-                      ],
-                    );
-                  } else
-                    return Text("no Data Found");
-                }
-              }),
-        ),
-      ],
+                          Container(
+                            height: MediaQuery.of(context).size.height * 0.56,
+                            child: ListView.builder(
+                              itemCount: filteredCotisations.length,
+                              itemBuilder: (context, index) {
+                                mListColor = !mListColor;
+                                return ViewClient(filteredCotisations[index]);
+                              },
+                            ),
+                          ),
+                        ],
+                      );
+                    } else
+                      return Text("no Data Found");
+                  }
+                }),
+          ),
+        ],
+      ),
     );
   }
 
@@ -667,6 +704,7 @@ class _ListAgentState extends State<ListAgent> {
     );
   }
 
+  // Supression agent
   Future<void> deleteAgent(AgentModel currAgentData) async {
     return showDialog<void>(
       context: context,

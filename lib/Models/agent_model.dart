@@ -46,7 +46,7 @@ class AgentModel{
     return _data;
   }
 
-  static Future<void> insertAgent(
+  static Future<bool> insertAgent(
       AgentModel userModel, BuildContext context) async {
       userModel.mdp = Encryption.EncryptPassword(userModel.mdp);
       final _id = M.ObjectId().$oid;
@@ -58,13 +58,33 @@ class AgentModel{
     backgroundColor: Colors.green,
     )
     );
+      if(result == false){
+        showDialog(
+            context: context,
+            builder: (context) {
+              return AlertDialog(
+                  title: Text("Erreur"),
+                  content: Container(
+                    height: 150,
+                    child: Column(children: const [
+                      Text(
+                        "Echec de l'opération",
+                        style:
+                        TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
+                      ),
+                    ]),
+                  ));
+            });
+        return false;
+      }
+      else return true;
   }
   static Future<void> modifierAgent(
       AgentModel agentModel, BuildContext context) async {
     agentModel.mdp = Encryption.EncryptPassword(agentModel.mdp);
     var result = await MongoDatabase.updateAgent(agentModel,Config.agent_collection);
     ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text("Agent Modifier"),
+        .showSnackBar(SnackBar(content: Text("Agent Modifié"),
       backgroundColor: Colors.green,
     )
     );
@@ -72,7 +92,7 @@ class AgentModel{
   static Future<void> deleteAgent(String idAgent, BuildContext context) async {
     var result = await MongoDatabase.deleteById(idAgent,Config.agent_collection);
     ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text("Agent Modifier"),
+        .showSnackBar(SnackBar(content: Text("Agent Supprimé"),
       backgroundColor: Colors.green,
     )
     );
